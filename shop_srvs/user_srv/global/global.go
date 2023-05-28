@@ -6,12 +6,14 @@ import (
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 	"log"
+	"mxshop_srvs/user_srv/config"
 	"os"
 	"time"
 )
 
 var (
-	DB *gorm.DB
+	DB           *gorm.DB
+	ServerConfig config.ServeConfig
 )
 
 func init() {
