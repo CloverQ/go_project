@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/hashicorp/consul/api"
+	"github.com/satori/go.uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -12,12 +13,16 @@ import (
 	"mxshop_srvs/user_srv/handler"
 	"mxshop_srvs/user_srv/initialize"
 	"mxshop_srvs/user_srv/proto"
+	"mxshop_srvs/user_srv/utils"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
 	IP := flag.String("ip", "0.0.0.0", "ip地址")
-	Port := flag.Int("port", 50051, "端口号")
+	Port := flag.Int("port", 0, "端口号")
 	// 初始化
 	initialize.InitLogger()
 	initialize.InitConfig()
@@ -26,6 +31,9 @@ func main() {
 
 	flag.Parse()
 	zap.S().Info("ip: ", *IP)
+	if *Port == 0 {
+		*Port, _ = utils.GetFreePort()
+	}
 	zap.S().Info("port: ", *Port)
 	server := grpc.NewServer()
 	proto.RegisterUserServer(server, &handler.UserServer{})
@@ -45,7 +53,7 @@ func main() {
 	}
 	//生成对应的检查对象
 	check := &api.AgentServiceCheck{
-		GRPC:                           fmt.Sprintf("137.154.193.179:50051"),
+		GRPC:                           fmt.Sprintf("137.154.193.179:%d", *Port),
 		Timeout:                        "5s",
 		Interval:                       "5s",
 		DeregisterCriticalServiceAfter: "10s",
@@ -54,7 +62,8 @@ func main() {
 	//生成注册对象
 	registration := new(api.AgentServiceRegistration)
 	registration.Name = global.ServerConfig.Name
-	registration.ID = global.ServerConfig.Name
+	serviceID := fmt.Sprintf("%s", uuid.NewV4())
+	registration.ID = serviceID
 	registration.Port = *Port
 	registration.Tags = []string{"imooc", "bobby", "user", "srv"}
 	registration.Address = "137.154.193.179"
@@ -64,8 +73,18 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = server.Serve(lis)
-	if err != nil {
-		panic("failed to start grpc: " + err.Error())
+	go func() {
+		err = server.Serve(lis)
+		if err != nil {
+			panic("failed to start grpc: " + err.Error())
+		}
+	}()
+	//接收终止信号
+	quit := make(chan os.Signal)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	if err = client.Agent().ServiceDeregister(serviceID); err != nil {
+		zap.S().Info("注销失败")
 	}
+	zap.S().Info("注销成功")
 }

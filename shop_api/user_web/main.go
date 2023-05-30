@@ -5,9 +5,11 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"shop_api/user_web/global"
 	"shop_api/user_web/initialize"
+	"shop_api/user_web/utils"
 	myvalidator "shop_api/user_web/validator"
 )
 
@@ -24,6 +26,17 @@ func main() {
 	}
 	// 5. 初始化srv的连接
 	initialize.InitSrvConn()
+
+	viper.AutomaticEnv()
+	//如果是本地开发环境，端口号固定，线上环境自动获取端口号
+	debug := viper.GetBool("MXSHOP_DEBUG")
+	if !debug {
+		port, err := utils.GetFreePort()
+		if err == nil {
+			global.ServerConfig.Port = port
+		}
+
+	}
 	//注册验证器
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		_ = v.RegisterValidation("mobile", myvalidator.ValidateMobile)
@@ -34,6 +47,7 @@ func main() {
 			return t
 		})
 	}
+
 	zap.S().Debugf("启动服务器，端口: %d", global.ServerConfig.Port)
 	if err := Router.Run(fmt.Sprintf(":%d", global.ServerConfig.Port)); err != nil {
 		zap.S().Panic("启动失败: ", err.Error())

@@ -14,6 +14,7 @@ import (
 var (
 	DB           *gorm.DB
 	ServerConfig config.ServeConfig
+	NacosConfig  config.NacosConfig
 )
 
 func init() {
